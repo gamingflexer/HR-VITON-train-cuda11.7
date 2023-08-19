@@ -33,13 +33,13 @@ def remove_overlap(seg_out, warped_cm):
 def get_opt():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--name', type=str, required=True)
+    parser.add_argument('--name', type=str, required=True,default="train")
     parser.add_argument('--gpu_ids', type=str, default='0')
     parser.add_argument('-j', '--workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=8)
     parser.add_argument('--fp16', action='store_true', help='use amp')
     # Cuda availability
-    parser.add_argument('--cuda',default=False, help='cuda or cpu')
+    parser.add_argument('--cuda',default=True, help='cuda or cpu')
 
     parser.add_argument("--dataroot", default="./data/")
     parser.add_argument("--datamode", default="train")
@@ -212,7 +212,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
                 input2 = torch.cat([input_parse_agnostic_down, densepose_down], 1)
 
                 # forward
-                flow_list, fake_segmap, _, warped_clothmask_paired = tocg(input1, input2)
+                flow_list, fake_segmap, _, warped_clothmask_paired = tocg(input1, input2,)
                 
                 # warped cloth mask one hot 
                 warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
@@ -363,24 +363,25 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
         # --------------------------------------------------------------------------------------------------------------
         if (step + 1) % opt.tensorboard_count == 0:
             i = 0
-            grid = make_image_grid([(c_paired[0].cpu() / 2 + 0.5), (cm[0].cpu()).expand(3, -1, -1), ((pose.cpu()[0]+1)/2), visualize_segmap(parse_agnostic.cpu(), batch=i),
-                                    (warped_cloth_paired[i].cpu() / 2 + 0.5), (agnostic[i].cpu() / 2 + 0.5), (pose[i].cpu() / 2 + 0.5), visualize_segmap(fake_parse_gauss.cpu(), batch=i),
-                                    (output[i].cpu() / 2 + 0.5), (im[i].cpu() / 2 + 0.5)],
-                                    nrow=4)
-            board.add_images('train_images', grid.unsqueeze(0), step + 1)
-            board.add_scalar('Loss/gen', loss_gen.item(), step + 1)
-            board.add_scalar('Loss/gen/adv', G_losses['GAN'].mean().item(), step + 1)
-            #board.add_scalar('Loss/gen/l1', G_losses['L1'].mean().item(), step + 1)
-            board.add_scalar('Loss/gen/feat', G_losses['GAN_Feat'].mean().item(), step + 1)
-            board.add_scalar('Loss/gen/vgg', G_losses['VGG'].mean().item(), step + 1)
-            board.add_scalar('Loss/dis', loss_dis.item(), step + 1)
-            board.add_scalar('Loss/dis/adv_fake', D_losses['D_Fake'].mean().item(), step + 1)
-            board.add_scalar('Loss/dis/adv_real', D_losses['D_Real'].mean().item(), step + 1)
+            # grid = make_image_grid([(c_paired[0].cpu() / 2 + 0.5), (cm[0].cpu()).expand(3, -1, -1), ((pose.cpu()[0]+1)/2), visualize_segmap(parse_agnostic.cpu(), batch=i),
+            #                         (warped_cloth_paired[i].cpu() / 2 + 0.5), (agnostic[i].cpu() / 2 + 0.5), (pose[i].cpu() / 2 + 0.5), visualize_segmap(fake_parse_gauss.cpu(), batch=i),
+            #                         (output[i].cpu() / 2 + 0.5), (im[i].cpu() / 2 + 0.5)],
+            #                         nrow=4)
+            # board.add_images('train_images', grid.unsqueeze(0), step + 1)
+            # board.add_scalar('Loss/gen', loss_gen.item(), step + 1)
+            # board.add_scalar('Loss/gen/adv', G_losses['GAN'].mean().item(), step + 1)
+            # #board.add_scalar('Loss/gen/l1', G_losses['L1'].mean().item(), step + 1)
+            # board.add_scalar('Loss/gen/feat', G_losses['GAN_Feat'].mean().item(), step + 1)
+            # board.add_scalar('Loss/gen/vgg', G_losses['VGG'].mean().item(), step + 1)
+            # board.add_scalar('Loss/dis', loss_dis.item(), step + 1)
+            # board.add_scalar('Loss/dis/adv_fake', D_losses['D_Fake'].mean().item(), step + 1)
+            # board.add_scalar('Loss/dis/adv_real', D_losses['D_Real'].mean().item(), step + 1)
             
             # unpaired visualize
             generator.eval()
             
             inputs = test_vis_loader.next_batch()
+            
             # input
             agnostic = inputs['agnostic'].cuda()
             parse_GT = inputs['parse'].cuda()
@@ -636,7 +637,7 @@ def main():
         input2_nc = opt.semantic_nc + 3  # parse_agnostic + densepose
         tocg = ConditionGenerator(opt, input1_nc=input1_nc, input2_nc=input2_nc, output_nc=13, ngf=96, norm_layer=nn.BatchNorm2d)
         # Load Checkpoint
-        load_checkpoint(tocg, opt.tocg_checkpoint)
+        load_checkpoint(tocg, opt.tocg_checkpoint,opt)
 
     # Generator model
     generator = SPADEGenerator(opt, 3+3+3)
